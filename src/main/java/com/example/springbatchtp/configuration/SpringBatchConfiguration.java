@@ -44,6 +44,10 @@ public class SpringBatchConfiguration {
     private ItemWriter<TransactionResponseDto> transactionResponseDtoItemWriter;
     @Autowired
     private ItemProcessor<TransactionRequestDto,TransactionResponseDto> transactionResponseDtoItemProcessor;
+    @Autowired
+    private TransactionRepository transactionRepository;
+    @Autowired
+    private CompteRepository compteRepository;
 
     @Bean
     public Job bankJob(){
@@ -90,6 +94,7 @@ public class SpringBatchConfiguration {
     }
     @Bean
     public ItemProcessor<TransactionRequestDto,TransactionResponseDto> itemProcessor(){
+        //dans process j'ai fait une seule chose c'est adapter la date
         return new ItemProcessor<TransactionRequestDto, TransactionResponseDto>() {
             private SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
             @Override
@@ -107,43 +112,42 @@ public class SpringBatchConfiguration {
     @Bean
     public ItemWriter<TransactionResponseDto> itemWriter(){
         return new ItemWriter<TransactionResponseDto>() {
-            @Autowired
-            private TransactionRepository transactionRepository;
-            @Autowired
-            private CompteRepository compteRepository;
+
             @Override
             public void write(List<? extends TransactionResponseDto> list) throws Exception {
                 for(int i=0;i<list.size();i++)
                 {  Transaction transaction = new Transaction();
-                    //fiha prob
+                    //stocker date transition dans calender
                     Calendar calendar = Calendar.getInstance();
                     calendar.setTime(list.get(i).getDateTransaction());
-                    //get the day
+
+                    //get the day and check it
                     if(calendar.get(Calendar.DAY_OF_MONTH)<25)
                     {
-                        // calendar.add(Calendar.MONTH, 1);
+                        //add days to move to the first day of next month
                          calendar.add(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH)-calendar.get(Calendar.DAY_OF_MONTH)+1);
 
-
                     }else
-                    {    calendar.add(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH)-calendar.get(Calendar.DAY_OF_MONTH)+1);
+                    {    //add days to move to the first day of next month
+                        calendar.add(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH)-calendar.get(Calendar.DAY_OF_MONTH)+1);
+                        //then add one other month
                         calendar.add(Calendar.MONTH, 1);
-                        //if(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)==31)
                     }
+                    //set the time of dateDebit to 08:30
                     Date dateDebit = calendar.getTime();
                     dateDebit.setHours(8);
                     dateDebit.setMinutes(30);
+
                     transaction.setDateDebit(dateDebit);
                     transaction.setIdTransaction(list.get(i).getIdTransaction());
                     transaction.setDateTransaction(list.get(i).getDateTransaction());
                     transaction.setMontant(list.get(i).getMontant());
 
                     transactionRepository.save(transaction);
+
                    //je dois avoir des comptes dans ma bd pour faire cette partie
-                   Compte compte = new Compte();
-                    //Compte compte =compteRepository.getById(list.get(i).getIdCompte());
-                    compte.setIdCompte(list.get(i).getIdCompte());
-                   compte.setSolde(/*compte.getSolde()-*/list.get(i).getMontant());
+                    Compte compte =compteRepository.getById(list.get(i).getIdCompte());
+                    compte.setSolde(compte.getSolde()-list.get(i).getMontant());
 
                    compteRepository.save(compte);
 
